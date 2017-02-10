@@ -7458,3 +7458,4 @@ static int pp_ppb_setup(struct mdss_mdp_mixer *mixer)
 	}
 	return ret;
 }
+
