@@ -658,7 +658,7 @@ void pm_stay_awake(struct device *dev)
 }
 EXPORT_SYMBOL_GPL(pm_stay_awake);
 
-	/*ZTE ++++*/
+	/*ZTE
 	#ifdef DUMP_WAKELOCK
 	if (0 != ws_debug_mask)
 		pr_info("ZTE_PM_LOCK deactive %s\n" , ws->name);
@@ -670,7 +670,7 @@ EXPORT_SYMBOL_GPL(pm_stay_awake);
 			WARN(1 , "ZTE_PM_WAKELOCK release wakelock %s:\n" , ws->name);
 	}
 	#endif
-	/*ZTE ----*/
+	ZTE ----*/
 
 /**
  * __pm_relax - Notify the PM core that processing of a wakeup event has ended.
