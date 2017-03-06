@@ -293,7 +293,7 @@ Synaptics id pin PULL UP.
 set id pin to pull up, then check the pin status:
 0 for Goodix, 1 for Synaptics
 **************************************************/
-static int fingerprint_hw = FINGERPRINT_HW_UNKOWN;
+static int fingerprint_hw = FINGERPRINT_HW_GOODIX;
 module_param(fingerprint_hw, int, 0644);
 static void zte_misc_fingerprint_hw_check(struct device *dev)
 {

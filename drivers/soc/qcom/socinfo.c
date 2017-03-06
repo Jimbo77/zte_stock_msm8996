@@ -728,7 +728,7 @@ int socinfo_get_pv_flag(void)
 EXPORT_SYMBOL(socinfo_get_pv_flag);
 
 //ZTE fingerprint hw setting
-static int fingprint_hw_type = -1;
+static int fingprint_hw_type = 0;
 void socinfo_set_fp_hw(int val)
 {
     fingprint_hw_type = val;
