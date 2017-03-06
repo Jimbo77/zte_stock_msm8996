@@ -42,6 +42,16 @@
 #include <linux/reboot.h>	/* zte add For kernel_power_off() */
 #include "pmic-voter.h"
 #include <soc/qcom/socinfo.h>
+
+#ifdef CONFIG_FORCE_FAST_CHARGE
+#include <linux/fastchg.h>
+#endif
+
+#ifdef CONFIG_BLX
+#include <linux/blx.h>
+#endif
+
+
 /* Mask/Bit helpers */
 #define _SMB_MASK(BITS, POS) \
 	((unsigned char)(((1 << (BITS)) - 1) << (POS)))
@@ -1069,8 +1079,20 @@ static int get_prop_batt_status(struct smbchg_chip *chip)
 		return POWER_SUPPLY_STATUS_UNKNOWN;
 	}
 
-	if ((reg & BAT_TCC_REACHED_BIT)|| (capacity == 100))
-		return POWER_SUPPLY_STATUS_FULL;
+	#ifdef CONFIG_BLX
+	int cap_level = get_cap_level();
+	
+	if (capacity < cap_level)
+
+		goto cont_charge;
+
+	if/* ((reg & BAT_TCC_REACHED_BIT)||*/ (capacity == cap_level)
+
+		goto stop_charge;
+		
+
+	/*return;*/
+	#endif
 
 	chg_inhibit = reg & CHG_INHIBIT_BIT;
 	if (chg_inhibit)
@@ -1101,6 +1123,30 @@ static int get_prop_batt_status(struct smbchg_chip *chip)
 out:
 	pr_smb_rt(PR_MISC, "CHGR_STS = 0x%02x\n", reg);
 	return status;
+
+stop_charge:
+
+	vote(chip->battchg_suspend_votable,USER_EN_VOTER,
+				true, 0);
+	vote(chip->usb_suspend_votable,USER_EN_VOTER,
+				true, 0);
+	vote(chip->dc_suspend_votable,USER_EN_VOTER,
+				true, 0);
+	
+	return POWER_SUPPLY_STATUS_FULL;
+
+cont_charge:
+
+	
+	vote(chip->battchg_suspend_votable,USER_EN_VOTER,
+				false, 0);
+	vote(chip->usb_suspend_votable,USER_EN_VOTER,
+				false, 0);
+	vote(chip->dc_suspend_votable,USER_EN_VOTER,
+				false, 0);
+	
+	return POWER_SUPPLY_STATUS_CHARGING;
+
 }
 
 #define BAT_PRES_STATUS			0x08
@@ -1238,10 +1284,14 @@ static int get_prop_batt_capacity(struct smbchg_chip *chip)
 	else
 		report_zero=false;
 
-	if((capacity >= 98) && (get_prop_batt_status(chip) == POWER_SUPPLY_STATUS_FULL))
-		return 100;
+	#ifdef CONFIG_BLX
+	int cap_level = get_cap_level();
+
+	if((capacity >= cap_level) && (get_prop_batt_status(chip) == POWER_SUPPLY_STATUS_FULL))
+		return capacity;
 
 	return capacity;
+	#endif
 }
 
 #define DEFAULT_BATT_TEMP		200
@@ -1980,7 +2030,13 @@ static int smbchg_set_usb_current_max(struct smbchg_chip *chip,
 			}
 			chip->usb_max_current_ma = 900;
 		}
-		if ((current_ma == CURRENT_500_MA) || (current_ma == CURRENT_900_MA)) {	// AP: Fast charge for USB
+
+#ifdef CONFIG_FORCE_FAST_CHARGE
+		if ((force_fast_charge > 0 && current_ma == CURRENT_500_MA) || current_ma == CURRENT_900_MA) {
+#else
+		if (current_ma == CURRENT_900_MA) {
+#endif
+
 			rc = smbchg_sec_masked_write(chip,
 					chip->usb_chgpth_base + CHGPTH_CFG,
 					CFG_USB_2_3_SEL_BIT, CFG_USB_3);
@@ -9059,7 +9115,7 @@ static int smbchg_probe(struct spmi_device *spmi)
 				  round_jiffies_relative(msecs_to_jiffies(HEARTBEAT_MS)));
 	/*zte add for update heartbeat work end*/
 	zte_chip =	chip;
-	
+
 #if 1	
 		rc = zte_read_s3_type(&s3_src_reg);
 		if (rc) {
