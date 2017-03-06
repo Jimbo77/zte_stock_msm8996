@@ -579,7 +579,7 @@ static void wakeup_source_activate(struct wakeup_source *ws)
 	/* Increment the counter of events in progress. */
 	cec = atomic_inc_return(&combined_event_count);
 
-	/*ZTE ++++*/
+	/*ZTE ++++
 	#ifdef DUMP_WAKELOCK
 	if (0 != ws_debug_mask)
 		pr_info("ZTE_PM_LOCK active %s\n" , ws->name);
@@ -591,7 +591,7 @@ static void wakeup_source_activate(struct wakeup_source *ws)
 			WARN(1 , "ZTE_PM_WAKELOCK acquire wakelock %s:\n" , ws->name);
 	}
 	#endif
-	/*ZTE ----*/
+	ZTE ----*/
 
 	trace_wakeup_source_activate(ws->name, cec);
 }
