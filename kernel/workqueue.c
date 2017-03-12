@@ -49,8 +49,6 @@
 #include <linux/moduleparam.h>
 #include <linux/uaccess.h>
 #include <linux/bug.h>
-#include <linux/module.h>
-#include <trace/events/sched.h>
 
 #include "workqueue_internal.h"
 
@@ -2043,14 +2041,6 @@ __acquires(&pool->lock)
 	lock_map_acquire_read(&pwq->wq->lockdep_map);
 	lock_map_acquire(&lockdep_map);
 	trace_workqueue_execute_start(work);
-#ifdef CONFIG_KALLSYMS
-	if (tracing_is_disabled() == false) {
-		char buffer[KSYM_SYMBOL_LEN];
-
-		sprint_symbol(buffer, (unsigned long) worker->current_func);
-		set_task_comm(current, buffer);
-	}
-#endif
 	worker->current_func(work);
 	/*
 	 * While we must be careful to not use "work" after this, the trace
