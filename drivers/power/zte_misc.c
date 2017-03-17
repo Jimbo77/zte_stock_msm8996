@@ -293,7 +293,7 @@ Synaptics id pin PULL UP.
 set id pin to pull up, then check the pin status:
 0 for Goodix, 1 for Synaptics
 **************************************************/
-static int fingerprint_hw = FINGERPRINT_HW_GOODIX;
+static int fingerprint_hw = FINGERPRINT_HW_UNKOWN;
 module_param(fingerprint_hw, int, 0644);
 static void zte_misc_fingerprint_hw_check(struct device *dev)
 {
@@ -301,9 +301,9 @@ static void zte_misc_fingerprint_hw_check(struct device *dev)
     uint32_t *buf = NULL;
     uint32_t board_id = 3;//default set to 3,means a new board
 #ifdef CONFIG_ZTE_BOOT_MODE
-    /*int force_hw = socinfo_get_fp_hw();
-#else*/
-    int force_hw = FINGERPRINT_HW_GOODIX;
+    int force_hw = socinfo_get_fp_hw();
+#else
+    int force_hw = FINGERPRINT_HW_UNKOWN;
 #endif
 
     np = of_find_compatible_node(NULL, NULL, "qcom,msm-imem-board-id");
@@ -323,7 +323,7 @@ static void zte_misc_fingerprint_hw_check(struct device *dev)
     else
         fingerprint_hw = FINGERPRINT_HW_GOODIX;
 
-    if (force_hw != FINGERPRINT_HW_GOODIX ) {
+    if (force_hw != FINGERPRINT_HW_UNKOWN ) {
         fingerprint_hw = force_hw;
         pr_info("fingerprint hw force set to %d %s\n",fingerprint_hw, (fingerprint_hw==FINGERPRINT_HW_SYNAFP)?"SYNAFP":"GOODIX");
     }

@@ -915,7 +915,7 @@ void dump_wakeup_source_zte(void)
 	rcu_read_lock();
 	list_for_each_entry_rcu(ws, &wakeup_sources, entry) {
 		if (ws->active)
-			pr_info("zte_dump wakesource %s is active for  %lu times\n", ws->name, ws->active_count);
+			pr_info("zte_dump wakesource %s is active\n" , ws->name);
 	}
 	rcu_read_unlock();
 }

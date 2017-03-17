@@ -2091,7 +2091,7 @@ usbnet_probe (struct usb_interface *udev, const struct usb_device_id *prod)
 	// set up our own records
 	net = alloc_etherdev(sizeof(*dev));
 	if (!net)
-		goto exit;
+		goto out;
 
 	/* netdev_printk() needs this so do it as early as possible */
 	SET_NETDEV_DEV(net, &udev->dev);
@@ -2141,7 +2141,7 @@ usbnet_probe (struct usb_interface *udev, const struct usb_device_id *prod)
 	if (info->bind) {
 		status = info->bind (dev, udev);
 		if (status < 0)
-			goto free_netdevice;
+			goto out1;
 
 		// heuristic:  "usb%d" for links we know are two-host,
 		// else "eth%d" when there's reasonable doubt.  userspace
@@ -2279,9 +2279,17 @@ free_urb:
 unbind:
 	if (info->unbind)
 		info->unbind (dev, udev);
-free_netdevice:
+
+out1:
+	/* subdrivers must undo all they did in bind() if they
+	 * fail it, but we may fail later and a deferred kevent
+	 * may trigger an error resubmitting itself and, worse,
+	 * schedule a timer. So we kill it all just in case.
+	 */
+	cancel_work_sync(&dev->kevent);
+	del_timer_sync(&dev->delay);
 	free_netdev(net);
-exit:
+out:
 	return status;
 }
 EXPORT_SYMBOL_GPL(usbnet_probe);

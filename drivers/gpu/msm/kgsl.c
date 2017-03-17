@@ -525,17 +525,20 @@ void kgsl_context_dump(struct kgsl_context *context)
 EXPORT_SYMBOL(kgsl_context_dump);
 
 /* Allocate a new context ID */
-static int _kgsl_get_context_id(struct kgsl_device *device)
+static int _kgsl_get_context_id(struct kgsl_device *device,
+		struct kgsl_context *context)
 {
 	int id;
 
 	idr_preload(GFP_KERNEL);
 	write_lock(&device->context_lock);
-	/* Allocate the slot but don't put a pointer in it yet */
-	id = idr_alloc(&device->context_idr, NULL, 1,
+	id = idr_alloc(&device->context_idr, context, 1,
 		KGSL_MEMSTORE_MAX, GFP_NOWAIT);
 	write_unlock(&device->context_lock);
 	idr_preload_end();
+
+	if (id > 0)
+		context->id = id;
 
 	return id;
 }
@@ -560,7 +563,7 @@ int kgsl_context_init(struct kgsl_device_private *dev_priv,
 	char name[64];
 	int ret = 0, id;
 
-	id = _kgsl_get_context_id(device);
+	id = _kgsl_get_context_id(device, context);
 	if (id == -ENOSPC) {
 		/*
 		 * Before declaring that there are no contexts left try
@@ -569,7 +572,7 @@ int kgsl_context_init(struct kgsl_device_private *dev_priv,
 		 */
 
 		flush_workqueue(device->events_wq);
-		id = _kgsl_get_context_id(device);
+		id = _kgsl_get_context_id(device, context);
 	}
 
 	if (id < 0) {
@@ -580,8 +583,6 @@ int kgsl_context_init(struct kgsl_device_private *dev_priv,
 
 		return id;
 	}
-
-	context->id = id;
 
 	kref_init(&context->refcount);
 	/*
@@ -1712,12 +1713,6 @@ long kgsl_ioctl_drawctxt_create(struct kgsl_device_private *dev_priv,
 		goto done;
 	}
 	trace_kgsl_context_create(dev_priv->device, context, param->flags);
-
-	/* Commit the pointer to the context in context_idr */
-	write_lock(&device->context_lock);
-	idr_replace(&device->context_idr, context, context->id);
-	write_unlock(&device->context_lock);
-
 	param->drawctxt_id = context->id;
 done:
 	return result;
@@ -2439,8 +2434,6 @@ static int kgsl_setup_dma_buf(struct kgsl_device *device,
 	meta->dmabuf = dmabuf;
 	meta->attach = attach;
 
-	attach->priv = entry;
-
 	entry->priv_data = meta;
 	entry->memdesc.pagetable = pagetable;
 	entry->memdesc.size = 0;
@@ -2488,45 +2481,6 @@ out:
 	}
 
 	return ret;
-}
-#endif
-
-#ifdef CONFIG_DMA_SHARED_BUFFER
-void kgsl_get_egl_counts(struct kgsl_mem_entry *entry,
-		int *egl_surface_count, int *egl_image_count)
-{
-	struct kgsl_dma_buf_meta *meta = entry->priv_data;
-	struct dma_buf *dmabuf = meta->dmabuf;
-	struct dma_buf_attachment *mem_entry_buf_attachment = meta->attach;
-	struct device *buf_attachment_dev = mem_entry_buf_attachment->dev;
-	struct dma_buf_attachment *attachment = NULL;
-
-	mutex_lock(&dmabuf->lock);
-	list_for_each_entry(attachment, &dmabuf->attachments, node) {
-		struct kgsl_mem_entry *scan_mem_entry = NULL;
-
-		if (attachment->dev != buf_attachment_dev)
-			continue;
-
-		scan_mem_entry = attachment->priv;
-		if (!scan_mem_entry)
-			continue;
-
-		switch (kgsl_memdesc_get_memtype(&scan_mem_entry->memdesc)) {
-		case KGSL_MEMTYPE_EGL_SURFACE:
-			(*egl_surface_count)++;
-			break;
-		case KGSL_MEMTYPE_EGL_IMAGE:
-			(*egl_image_count)++;
-			break;
-		}
-	}
-	mutex_unlock(&dmabuf->lock);
-}
-#else
-void kgsl_get_egl_counts(struct kgsl_mem_entry *entry,
-		int *egl_surface_count, int *egl_image_count)
-{
 }
 #endif
 

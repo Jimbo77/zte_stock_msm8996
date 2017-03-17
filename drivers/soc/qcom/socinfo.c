@@ -666,7 +666,7 @@ __setup(SOCINFO_CMDLINE_PV_FLAG, zte_pv_flag_init);
 #define SOCINFO_CMDLINE_FP_HW_GOODIX        "goodix"
 static int __init zte_fingerprint_hw_init(char *ver)
 {
-	int fp_hw = FINGERPRINT_HW_GOODIX;
+	int fp_hw = FINGERPRINT_HW_UNKOWN;
 
 	if (!strncmp(ver, SOCINFO_CMDLINE_FP_HW_SYNAFP, strlen(SOCINFO_CMDLINE_FP_HW_SYNAFP)))
 	{
@@ -728,7 +728,7 @@ int socinfo_get_pv_flag(void)
 EXPORT_SYMBOL(socinfo_get_pv_flag);
 
 //ZTE fingerprint hw setting
-static int fingprint_hw_type = 0;
+static int fingprint_hw_type = -1;
 void socinfo_set_fp_hw(int val)
 {
     fingprint_hw_type = val;

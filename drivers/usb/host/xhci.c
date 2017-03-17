@@ -1151,8 +1151,8 @@ int xhci_resume(struct xhci_hcd *xhci, bool hibernated)
 		/* Resume root hubs only when have pending events. */
 		status = readl(&xhci->op_regs->status);
 		if (status & STS_EINT) {
-			usb_hcd_resume_root_hub(hcd);
 			usb_hcd_resume_root_hub(xhci->shared_hcd);
+			usb_hcd_resume_root_hub(hcd);
 		}
 	}
 
@@ -1167,10 +1167,10 @@ int xhci_resume(struct xhci_hcd *xhci, bool hibernated)
 
 	/* Re-enable port polling. */
 	xhci_dbg(xhci, "%s: starting port polling.\n", __func__);
-	set_bit(HCD_FLAG_POLL_RH, &hcd->flags);
-	usb_hcd_poll_rh_status(hcd);
 	set_bit(HCD_FLAG_POLL_RH, &xhci->shared_hcd->flags);
 	usb_hcd_poll_rh_status(xhci->shared_hcd);
+	set_bit(HCD_FLAG_POLL_RH, &hcd->flags);
+	usb_hcd_poll_rh_status(hcd);
 
 	return retval;
 }
@@ -3845,6 +3845,9 @@ static int xhci_setup_device(struct usb_hcd *hcd, struct usb_device *udev,
 	if (xhci->xhc_state)	/* dying, removing or halted */
 		goto out;
 
+	if (xhci->xhc_state)	/* dying, removing or halted */
+		return -EINVAL;
+
 	if (!udev->slot_id) {
 		xhci_dbg_trace(xhci, trace_xhci_dbg_address,
 				"Bad Slot ID %d", udev->slot_id);
@@ -4965,6 +4968,16 @@ int xhci_gen_setup(struct usb_hcd *hcd, xhci_get_quirks_t get_quirks)
 		goto error;
 	xhci_dbg(xhci, "Reset complete\n");
 
+	/*
+	 * On some xHCI controllers (e.g. R-Car SoCs), the AC64 bit (bit 0)
+	 * of HCCPARAMS1 is set to 1. However, the xHCs don't support 64-bit
+	 * address memory pointers actually. So, this driver clears the AC64
+	 * bit of xhci->hcc_params to call dma_set_coherent_mask(dev,
+	 * DMA_BIT_MASK(32)) in this xhci_gen_setup().
+	 */
+	if (xhci->quirks & XHCI_NO_64BIT_SUPPORT)
+		xhci->hcc_params &= ~BIT(0);
+
 	/* Set dma_mask and coherent_dma_mask to 64-bits,
 	 * if xHC supports 64-bit addressing */
 	if (HCC_64BIT_ADDR(xhci->hcc_params) &&
@@ -4979,61 +4992,6 @@ error:
 	return retval;
 }
 EXPORT_SYMBOL_GPL(xhci_gen_setup);
-
-dma_addr_t xhci_get_sec_event_ring_dma_addr(struct usb_hcd *hcd,
-	unsigned intr_num)
-{
-	struct xhci_hcd *xhci = hcd_to_xhci(hcd);
-
-	if (intr_num > xhci->max_interrupters) {
-		xhci_err(xhci, "intr num %d > max intrs %d\n", intr_num,
-			xhci->max_interrupters);
-		return 0;
-	}
-
-	if (!(xhci->xhc_state & XHCI_STATE_HALTED) &&
-		xhci->sec_event_ring && xhci->sec_event_ring[intr_num]
-		&& xhci->sec_event_ring[intr_num]->first_seg)
-		return xhci->sec_event_ring[intr_num]->first_seg->dma;
-
-	return 0;
-}
-
-dma_addr_t xhci_get_dcba_dma_addr(struct usb_hcd *hcd,
-	struct usb_device *udev)
-{
-	struct xhci_hcd *xhci = hcd_to_xhci(hcd);
-
-	if (!(xhci->xhc_state & XHCI_STATE_HALTED) && xhci->dcbaa)
-		return xhci->dcbaa->dev_context_ptrs[udev->slot_id];
-
-	return 0;
-}
-
-dma_addr_t xhci_get_xfer_ring_dma_addr(struct usb_hcd *hcd,
-	struct usb_device *udev, struct usb_host_endpoint *ep)
-{
-	int ret;
-	unsigned int ep_index;
-	struct xhci_virt_device *virt_dev;
-
-	struct xhci_hcd *xhci = hcd_to_xhci(hcd);
-
-	ret = xhci_check_args(hcd, udev, ep, 1, true, __func__);
-	if (ret <= 0) {
-		xhci_err(xhci, "%s: invalid args\n", __func__);
-		return 0;
-	}
-
-	virt_dev = xhci->devs[udev->slot_id];
-	ep_index = xhci_get_endpoint_index(&ep->desc);
-
-	if (virt_dev->eps[ep_index].ring &&
-		virt_dev->eps[ep_index].ring->first_seg)
-		return virt_dev->eps[ep_index].ring->first_seg->dma;
-
-	return 0;
-}
 
 static const struct hc_driver xhci_hc_driver = {
 	.description =		"xhci-hcd",
@@ -5094,11 +5052,6 @@ static const struct hc_driver xhci_hc_driver = {
 	.enable_usb3_lpm_timeout =	xhci_enable_usb3_lpm_timeout,
 	.disable_usb3_lpm_timeout =	xhci_disable_usb3_lpm_timeout,
 	.find_raw_port_number =	xhci_find_raw_port_number,
-	.sec_event_ring_setup =		xhci_sec_event_ring_setup,
-	.sec_event_ring_cleanup =	xhci_sec_event_ring_cleanup,
-	.get_sec_event_ring_dma_addr =	xhci_get_sec_event_ring_dma_addr,
-	.get_xfer_ring_dma_addr =	xhci_get_xfer_ring_dma_addr,
-	.get_dcba_dma_addr =		xhci_get_dcba_dma_addr,
 };
 
 void xhci_init_driver(struct hc_driver *drv, int (*setup_fn)(struct usb_hcd *))
